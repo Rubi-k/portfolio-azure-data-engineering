@@ -25,7 +25,12 @@ The following diagram summarizes the end-to-end data pipeline:
 
 ![Project 1 Architecture](project1-adf-synapse/images/project1_architecture.png)
 
+### Azure Blob Storage Setup
+Created three containers to support the raw → curated → gold architecture.
 
+![Storage Containers](project1-adf-synapse/images/containers.png)
+
+👉 [See full Project 1 documentation](project1-adf-synapse/docs/README.md)
 
 ---
 
