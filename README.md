@@ -16,6 +16,10 @@ It includes **end-to-end pipelines, documentation, and architecture diagrams** t
 
 👉 [See project details](project1-adf-synapse/docs/README.md)
 
+## 📊 Project 1 Architecture
+
+![Project 1 Architecture](project1-adf-synapse/images/project1_architecture.png)
+
 ---
 
 ### 2. Mini Lakehouse with Databricks & Delta Lake
