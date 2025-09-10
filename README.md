@@ -17,19 +17,24 @@ It includes **end-to-end pipelines, documentation, and architecture diagrams** t
 👉 [See project details](project1-adf-synapse/docs/README.md)
 
 
+### Azure Blob Storage Setup
+Created three containers to support the raw → curated → gold architecture.
+- **rawdata** → raw CSV files.  
+- **curated** → cleansed Parquet data.  
+- **gold** → aggregated/analytical data.
+
+  
+![Storage Containers](project1-adf-synapse/images/containers.png)
 
 ### 📊 Project 1 Architecture
 
 The following diagram summarizes the end-to-end data pipeline:
 
-
+  
 ![Project 1 Architecture](project1-adf-synapse/images/project1_architecture.png)
 
-### Azure Blob Storage Setup
-Created three containers to support the raw → curated → gold architecture.
 
-![Storage Containers](project1-adf-synapse/images/containers.png)
-
+  
 👉 [See full Project 1 documentation](project1-adf-synapse/docs/README.md)
 
 ---
