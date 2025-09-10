@@ -29,11 +29,11 @@ Created three containers to support the raw → curated → gold architecture.
 ### 📊 Project 1 Architecture
 
 The following diagram summarizes the end-to-end data pipeline:
-
+<br>
   
 ![Project 1 Architecture](project1-adf-synapse/images/project1_architecture.png)
 
-
+<br>
   
 👉 [See full Project 1 documentation](project1-adf-synapse/docs/README.md)
 
