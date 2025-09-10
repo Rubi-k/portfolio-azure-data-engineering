@@ -13,7 +13,7 @@ The goal is to show best practices in **data pipelines** using Azure services.
 ## 🏗️ Architecture
 The pipeline follows a **raw → curated → analytics** approach.
 
-![Architecture](images/project1_architecture.png)
+![Architecture](../images/project1_architecture.png)
 
 ---
 
@@ -40,31 +40,17 @@ The pipeline follows a **raw → curated → analytics** approach.
 
 ## 📸 Screenshots
 - Azure Blob Storage containers  
-  ![Containers](images/containers.png)
+  ![Containers](../images/containers.png)
 
 - ADF Dataset Preview (`customers.csv`)  
-  ![Dataset Preview](images/dataset_customers_preview.png)
+  ![Dataset Preview](../images/dataset_customers_preview.png)
 
 - ADF Pipeline execution (Succeeded)  
-  ![Pipeline Success](images/pipeline_success.png)
+  ![Pipeline Success](../images/pipeline_success.png)
 
 - Parquet file in `curated/customers/`  
-  ![Curated Parquet](images/customers_parquet.png)
+  ![Curated Parquet](../images/customers_parquet.png)
 
 ---
 
-## 📌 Notes: Why Parquet format?
-- **Efficient storage** → compressed, smaller than CSV.  
-- **Schema & types** → preserves int, string, decimal, date.  
-- **Fast queries** → engines read only needed columns.  
-- **Industry standard** → widely used in Data Engineering.  
-
-👉 In short: **CSV is good for ingestion, Parquet is good for analytics**.
-
----
-
-## 🚀 Next Steps
-- Add pipeline for `orders.csv`.  
-- Create external tables in Synapse Serverless.  
-- Build SQL views for business reporting.  
-- (Optional) Expose data in Power BI.
+##
