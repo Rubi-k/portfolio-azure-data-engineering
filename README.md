@@ -35,7 +35,8 @@ The following diagram summarizes the end-to-end data pipeline:
 
 <br>
   
-👉 [See full Project 1 documentation](project1-adf-synapse/docs/README.md)
+👉 [See Project 1 details](project1-adf-synapse/README.md)
+
 
 ---
 
