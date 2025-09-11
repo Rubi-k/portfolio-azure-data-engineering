@@ -36,6 +36,12 @@ The pipeline follows a **raw → curated → analytics** approach.
    - Pipeline run succeeded ✅
    - Parquet file created in `curated/customers/`.
 
+5. **Synapse Connection (secure)**
+   - Created a **Database Master Key**.
+   - Configured a **Database Scoped Credential** with a SAS token.
+   - Defined an **External Data Source** pointing to the `curated` container.
+   - Verified access with `OPENROWSET` queries on `customers` and `orders`.
+
 ---
 
 ## 📸 Screenshots
@@ -51,6 +57,16 @@ The pipeline follows a **raw → curated → analytics** approach.
 - Parquet file in `curated/customers/`  
   ![Curated Parquet](../images/customers_parquet.png)
 
+- Synapse External Data Source creation  
+  ![Synapse DataSource](../images/synapse_external_datasource.png)
+
+- Synapse query over `customers` (TOP 10 rows)  
+  ![Synapse Query Customers](../images/synapse_openrowset_customers.png)
+
 ---
 
-##
+## ✅ Next Steps
+- Add `orders` pipeline and Parquet.
+- Create **External Tables** (`ext_customers`, `ext_orders`).
+- Build **business views** (e.g., sales by customer, sales by country).
+- Document results with screenshots and SQL scripts.
