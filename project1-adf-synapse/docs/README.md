@@ -60,7 +60,7 @@ The pipeline follows a **raw → curated → analytics** approach.
 - Synapse External Data Source creation  
   ![Synapse DataSource](../images/synapse_external_datasource.png)
 
-- Synapse query over `customers` (TOP 10 rows)  
+- Synapse sample query over `customers` (TOP 10 rows where/and/not clause)  
   ![Synapse Query Customers](../images/synapse_openrowset_customers.png)
 
 ---
