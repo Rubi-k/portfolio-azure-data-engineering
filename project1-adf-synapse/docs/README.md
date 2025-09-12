@@ -1,72 +1,152 @@
 # Project 1 – ETL with Azure Data Factory & Synapse Serverless
 
 ## 📌 Overview
-This project demonstrates a simple but professional **ETL pipeline in Azure**:
-- **Extract**: Raw CSV files from Azure Blob Storage (`rawdata`).
-- **Transform**: Data copied and converted into **Parquet** format.
-- **Load**: Curated data exposed in Azure Synapse Serverless for analytics.
+This project demonstrates an end-to-end ETL pipeline using **Azure Data Factory (ADF)** and **Azure Synapse Analytics Serverless SQL Pool**, following a lakehouse-style architecture.  
 
-The goal is to show best practices in **data pipelines** using Azure services.
+The workflow starts with CSV data stored in Azure Blob Storage (classic), transformed into Parquet files with ADF, and then **manually migrated** to **Azure Data Lake Storage Gen2** to enable Synapse Serverless external tables (due to Hierarchical Namespace requirements).  
 
----
-
-## 🏗️ Architecture
-The pipeline follows a **raw → curated → analytics** approach.
-
-![Architecture](../images/project1_architecture.png)
+The curated data is queried via external tables in Synapse and prepared for analytics.
 
 ---
 
-## 🔹 Steps Implemented
-1. **Storage setup**
-   - Created three containers: `rawdata`, `curated`, `gold`.
-   - Uploaded source files: `customers.csv`, `orders.csv`.
+## 🏗 Architecture
 
-2. **ADF Datasets**
-   - `ds_customers_raw` → input (CSV).
-   - `ds_customers_curated` → output (Parquet).
-   - (Later: `ds_orders_raw`, `ds_orders_curated`).
+![Architecture Diagram](../images/architecture.png)
 
-3. **Pipeline**
-   - `pl_copy_customers_raw_to_curated`
-   - Copy Activity from CSV → Parquet.
-   - Debug & Trigger execution tested.
-
-4. **Results**
-   - Pipeline run succeeded ✅
-   - Parquet file created in `curated/customers/`.
-
-5. **Synapse Connection (secure)**
-   - Created a **Database Master Key**.
-   - Configured a **Database Scoped Credential** with a SAS token.
-   - Defined an **External Data Source** pointing to the `curated` container.
-   - Verified access with `OPENROWSET` queries on `customers` and `orders`.
+- **Raw Zone**: CSV files (`customers.csv`, `orders.csv`) in Blob Storage (classic).
+- **Curated Zone**: Data transformed to Parquet format using ADF pipelines.
+- **Migration Step**: Curated Parquet files were manually copied to ADLS Gen2 using Azure Storage Explorer.
+- **Analytics Layer**: Synapse Serverless external tables over ADLS Gen2 curated zone for reporting and analysis.
 
 ---
 
-## 📸 Screenshots
-- Azure Blob Storage containers  
-  ![Containers](../images/containers.png)
+## 📂 Storage Setup
 
-- ADF Dataset Preview (`customers.csv`)  
-  ![Dataset Preview](../images/dataset_customers_preview.png)
+- Containers created: `rawdata/`, `curated/`, `gold/`
+- Source files uploaded to `rawdata/`: `customers.csv`, `orders.csv`
+- Curated Parquet outputs:
+  - `curated/customers/customers.parquet`
+  - `curated/orders/orders.parquet`
 
-- ADF Pipeline execution (Succeeded)  
-  ![Pipeline Success](../images/pipeline_success.png)
+Screenshots:
 
-- Parquet file in `curated/customers/`  
-  ![Curated Parquet](../images/customers_parquet.png)
-
-- Synapse External Data Source creation  
-  ![Synapse DataSource](../images/synapse_external_datasource.png)
-
-- Synapse sample query over `customers` (TOP 10 rows where/and/not clause)  
-  ![Synapse Query Customers](../images/synapse_openrowset_customers.png)
+![Blob containers](../images/storage_containers.png)  
+![Curated customers parquet](../images/storage_curated_customers.png)  
 
 ---
 
-## ✅ Next Steps
-- Add `orders` pipeline and Parquet.
-- Create **External Tables** (`ext_customers`, `ext_orders`).
-- Build **business views** (e.g., sales by customer, sales by country).
-- Document results with screenshots and SQL scripts.
+## ⚙️ Azure Data Factory (ADF)
+
+### Linked Services
+- **Azure Blob Storage (classic)** – used for raw and curated zones.
+- **Integration Runtime** – AutoResolve.
+
+### Datasets
+- `ds_customers_raw` → CSV (raw).  
+- `ds_customers_curated` → Parquet (curated).  
+- `ds_orders_raw` → CSV (raw).  
+- `ds_orders_curated` → Parquet (curated).  
+
+### Pipeline
+- **Copy Activity** to move CSV → Parquet.  
+- Data types casted and cleaned using Mapping Data Flow.  
+
+Screenshot:  
+![ADF pipeline](../images/adf_pipeline.png)
+
+---
+
+## 🗄 Azure Synapse Serverless
+
+After manual migration of Parquet files to **ADLS Gen2 (with Hierarchical Namespace)**, Synapse can connect via **Managed Identity**.
+
+### 1. Create Database
+```sql
+CREATE DATABASE demo_portfolio;
+GO
+```
+
+### 2. External Data Source
+```sql
+CREATE EXTERNAL DATA SOURCE eds_adls_synapse
+WITH (
+    LOCATION = 'abfss://curated@<your-storage-account>.dfs.core.windows.net'
+);
+GO
+```
+
+### 3. External File Format
+```sql
+CREATE EXTERNAL FILE FORMAT eff_parquet
+WITH (FORMAT_TYPE = PARQUET);
+GO
+```
+
+### 4. External Schema & Tables
+```sql
+CREATE SCHEMA curated;
+GO
+
+CREATE EXTERNAL TABLE curated.customers (
+    CustomerID NVARCHAR(50),
+    Name NVARCHAR(100),
+    Country NVARCHAR(50)
+)
+WITH (
+    LOCATION = '/customers/',
+    DATA_SOURCE = eds_adls_synapse,
+    FILE_FORMAT = eff_parquet
+);
+GO
+
+CREATE EXTERNAL TABLE curated.orders (
+    OrderID INT,
+    CustomerID NVARCHAR(50),
+    Amount FLOAT
+)
+WITH (
+    LOCATION = '/orders/',
+    DATA_SOURCE = eds_adls_synapse,
+    FILE_FORMAT = eff_parquet
+);
+GO
+```
+
+### 5. Validation Queries
+```sql
+SELECT TOP 10 * FROM curated.customers;
+SELECT TOP 10 * FROM curated.orders;
+```
+
+Screenshots:  
+![Synapse External Data Source](../images/synapse_external_datasource.png)  
+![Synapse Query Customers](../images/synapse_openrowset_customers.png)
+
+---
+
+## ✅ Lessons Learned
+
+- **Classic Blob Storage limitation**: Synapse Serverless cannot create external tables without **Hierarchical Namespace**.  
+- **Workaround**: Curated Parquet files were **manually migrated** to ADLS Gen2 using Azure Storage Explorer.  
+- **Schema bug fixed**: `CustomerID` was incorrectly defined as `INT` in the external table. Corrected to `NVARCHAR(50)` to match the Parquet schema.  
+- This highlights a **real-world architectural evolution**: starting fast with Blob Storage, then migrating to ADLS Gen2 to unlock full analytics capabilities.
+
+---
+
+## 🔮 Next Steps
+- Extend ADF pipeline to process `orders.csv`.  
+- Create **gold views** with typed business metrics.  
+- Connect Power BI for reporting.
+
+---
+
+## 📂 Repository Structure
+```
+/docs
+  ├── README.md              # Detailed documentation (this file)
+  ├── images/                # Screenshots
+  └── sql/                   # SQL scripts
+      ├── 01_synapse_setup.sql
+      └── 02_external_tables_and_views.sql
+/README.md                   # Short summary for project root
+```
