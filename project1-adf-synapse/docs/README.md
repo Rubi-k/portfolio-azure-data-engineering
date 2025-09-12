@@ -11,7 +11,7 @@ The curated data is queried via external tables in Synapse and prepared for anal
 
 ## 🏗 Architecture
 
-![Architecture Diagram](../images/architecture.png)
+![Architecture Diagram](../images/project1_architecture.png)
 
 - **Raw Zone**: CSV files (`customers.csv`, `orders.csv`) in Blob Storage (classic).
 - **Curated Zone**: Data transformed to Parquet format using ADF pipelines.
@@ -24,14 +24,12 @@ The curated data is queried via external tables in Synapse and prepared for anal
 
 - Containers created: `rawdata/`, `curated/`, `gold/`
 - Source files uploaded to `rawdata/`: `customers.csv`, `orders.csv`
-- Curated Parquet outputs:
-  - `curated/customers/customers.parquet`
-  - `curated/orders/orders.parquet`
+
 
 Screenshots:
 
-![Blob containers](../images/storage_containers.png)  
-![Curated customers parquet](../images/storage_curated_customers.png)  
+![Blob containers](../images/containers.png)  
+![Customers dataset](../images/dataset_customers_preview.png)  
 
 ---
 
@@ -52,7 +50,7 @@ Screenshots:
 - Data types casted and cleaned using Mapping Data Flow.  
 
 Screenshot:  
-![ADF pipeline](../images/adf_pipeline.png)
+![ADF pipeline success](../images/pipeline_success.png)
 
 ---
 
