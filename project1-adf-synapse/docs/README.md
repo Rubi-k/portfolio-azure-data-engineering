@@ -5,7 +5,7 @@ This project demonstrates an end-to-end ETL pipeline using **Azure Data Factory 
 
 The workflow starts with CSV data stored in Azure Blob Storage (classic), transformed into Parquet files with ADF, and then **manually migrated** to **Azure Data Lake Storage Gen2** to enable Synapse Serverless external tables (due to Hierarchical Namespace requirements).  
 
-The curated data is queried via external tables in Synapse and prepared for analytics.
+The curated data is queried via external tables in Synapse and prepared for analytics in the gold layer.
 
 ---
 
@@ -16,7 +16,7 @@ The curated data is queried via external tables in Synapse and prepared for anal
 - **Raw Zone**: CSV files (`customers.csv`, `orders.csv`) in Blob Storage (classic).
 - **Curated Zone**: Data transformed to Parquet format using ADF pipelines.
 - **Migration Step**: Curated Parquet files were manually copied to ADLS Gen2 using Azure Storage Explorer.
-- **Analytics Layer**: Synapse Serverless external tables over ADLS Gen2 curated zone for reporting and analysis.
+- **Analytics Layer**: Synapse Serverless external tables (curated) and business views (gold).
 
 ---
 
@@ -24,7 +24,6 @@ The curated data is queried via external tables in Synapse and prepared for anal
 
 - Containers created: `rawdata/`, `curated/`, `gold/`
 - Source files uploaded to `rawdata/`: `customers.csv`, `orders.csv`
-
 
 Screenshots:
 
@@ -100,7 +99,8 @@ GO
 CREATE EXTERNAL TABLE curated.orders (
     OrderID INT,
     CustomerID NVARCHAR(50),
-    Amount FLOAT
+    OrderDate DATE,
+    Amount DECIMAL(10,2)
 )
 WITH (
     LOCATION = '/orders/',
@@ -110,15 +110,66 @@ WITH (
 GO
 ```
 
-### 5. Validation Queries
+---
+
+## ⭐ Gold Layer – Business Views
+
+Business-friendly aggregated views created under schema `gold`:
+
 ```sql
+-- Total sales per customer
+CREATE OR ALTER VIEW gold.sales_per_customer AS
+SELECT 
+    c.CustomerID,
+    c.Name,
+    SUM(TRY_CAST(o.Amount AS DECIMAL(18,2))) AS TotalSales
+FROM curated.customers c
+JOIN curated.orders o
+  ON c.CustomerID = o.CustomerID
+GROUP BY c.CustomerID, c.Name;
+GO
+
+-- Total sales per country
+CREATE OR ALTER VIEW gold.sales_per_country AS
+SELECT 
+    c.Country,
+    SUM(TRY_CAST(o.Amount AS DECIMAL(18,2))) AS TotalSales
+FROM curated.customers c
+JOIN curated.orders o
+  ON c.CustomerID = o.CustomerID
+GROUP BY c.Country;
+GO
+```
+
+---
+
+## 🔍 Validation Queries
+
+Executed in Synapse to ensure consistency:
+
+```sql
+-- Inspect curated data
 SELECT TOP 10 * FROM curated.customers;
 SELECT TOP 10 * FROM curated.orders;
+
+-- Query gold views
+SELECT * FROM gold.sales_per_customer ORDER BY TotalSales DESC;
+SELECT * FROM gold.sales_per_country  ORDER BY TotalSales DESC;
+
+-- Sanity checks: totals must match
+SELECT SUM(TRY_CAST(Amount AS DECIMAL(18,2))) AS total_from_orders 
+FROM curated.orders;
+
+SELECT SUM(TotalSales) AS total_from_view_customers 
+FROM gold.sales_per_customer;
+
+SELECT SUM(TotalSales) AS total_from_view_country  
+FROM gold.sales_per_country;
 ```
 
 Screenshots:  
-![Synapse External Data Source](../images/synapse_external_datasource.png)  
-![Synapse Query Customers](../images/synapse_openrowset_customers.png)
+![Gold View per Customer](../images/gold_sales_per_customer.png)  
+![Gold View per Country](../images/gold_sales_per_country.png)  
 
 ---
 
@@ -126,15 +177,16 @@ Screenshots:
 
 - **Classic Blob Storage limitation**: Synapse Serverless cannot create external tables without **Hierarchical Namespace**.  
 - **Workaround**: Curated Parquet files were **manually migrated** to ADLS Gen2 using Azure Storage Explorer.  
-- **Schema bug fixed**: `CustomerID` was incorrectly defined as `INT` in the external table. Corrected to `NVARCHAR(50)` to match the Parquet schema.  
+- **Schema alignment**: Ensured `CustomerID` types are consistent across tables to allow joins.  
+- **Gold layer views**: Provided aggregated analytics for business use cases.  
 - This highlights a **real-world architectural evolution**: starting fast with Blob Storage, then migrating to ADLS Gen2 to unlock full analytics capabilities.
 
 ---
 
 ## 🔮 Next Steps
-- Extend ADF pipeline to process `orders.csv`.  
-- Create **gold views** with typed business metrics.  
-- Connect Power BI for reporting.
+- (Optional) Connect **Power BI** to Synapse gold views for dashboards.  
+- Add more datasets and transformations to expand analytics coverage.  
+- Automate deployment with Infrastructure as Code (Bicep/Terraform).
 
 ---
 
