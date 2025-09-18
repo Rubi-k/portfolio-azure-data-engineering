@@ -1,0 +1,9 @@
+# Project 2 requirements
+# These dependencies are required to run the preprocessing scripts locally.
+
+pandas>=2.0.0
+
+# Future optional dependencies:
+# pyarrow        # Parquet/Arrow format support
+# fastparquet    # Alternative Parquet engine
+# azure-storage-blob # Azure Blob Storage SDK (if used)
