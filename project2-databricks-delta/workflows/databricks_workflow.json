@@ -1,0 +1,83 @@
+{
+  "name": "Project2_MovieLens_Bronze_Silver_Gold",
+  "tasks": [
+    {
+      "task_key": "bronze_ratings",
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-repo-path>/notebooks/01_bronze_ingest",
+        "base_parameters": {
+          "raw_base_path": "abfss://raw@<acct>.dfs.core.windows.net/movielens/",
+          "bronze_base_path": "abfss://bronze@<acct>.dfs.core.windows.net/movielens/",
+          "run_mode": "full",
+          "table_name": "ratings",
+          "delimiter": ","
+        }
+      }
+    },
+    {
+      "task_key": "bronze_movies",
+      "depends_on": [
+        {
+          "task_key": "bronze_ratings"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-repo-path>/notebooks/01_bronze_ingest",
+        "base_parameters": {
+          "raw_base_path": "abfss://raw@<acct>.dfs.core.windows.net/movielens/",
+          "bronze_base_path": "abfss://bronze@<acct>.dfs.core.windows.net/movielens/",
+          "run_mode": "full",
+          "table_name": "movies",
+          "delimiter": ","
+        }
+      }
+    },
+    {
+      "task_key": "silver_ratings",
+      "depends_on": [
+        {
+          "task_key": "bronze_movies"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-repo-path>/notebooks/02_silver_transform",
+        "base_parameters": {
+          "bronze_base_path": "abfss://bronze@<acct>.dfs.core.windows.net/movielens/",
+          "silver_base_path": "abfss://silver@<acct>.dfs.core.windows.net/movielens/",
+          "table_name": "ratings"
+        }
+      }
+    },
+    {
+      "task_key": "silver_movies",
+      "depends_on": [
+        {
+          "task_key": "silver_ratings"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-repo-path>/notebooks/02_silver_transform",
+        "base_parameters": {
+          "bronze_base_path": "abfss://bronze@<acct>.dfs.core.windows.net/movielens/",
+          "silver_base_path": "abfss://silver@<acct>.dfs.core.windows.net/movielens/",
+          "table_name": "movies"
+        }
+      }
+    },
+    {
+      "task_key": "gold_models",
+      "depends_on": [
+        {
+          "task_key": "silver_movies"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/<your-repo-path>/notebooks/03_gold_models",
+        "base_parameters": {
+          "silver_base_path": "abfss://silver@<acct>.dfs.core.windows.net/movielens/",
+          "gold_base_path": "abfss://gold@<acct>.dfs.core.windows.net/movielens/"
+        }
+      }
+    }
+  ]
+}
