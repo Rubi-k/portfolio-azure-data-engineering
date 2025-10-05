@@ -1,0 +1,18 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "value": "adf-portfolio-devexec"
+        },
+        "ls_adls_properties_typeProperties_url": {
+            "value": "https://stportfoliodata.dfs.core.windows.net/"
+        },
+        "new_csv_trigger_properties_pl_ingest_sales_parameters_proc_date": {
+            "value": "@last(split(triggerBody().folderPath,'/'))"
+        },
+        "new_csv_trigger_properties_typeProperties_scope": {
+            "value": "/subscriptions/2717566b-0807-4290-a937-d49c91ad707b/resourceGroups/rg-adf-portfolio-dev/providers/Microsoft.Storage/storageAccounts/stportfoliodata"
+        }
+    }
+}

@@ -1,0 +1,754 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "type": "string",
+            "metadata": "Data Factory name",
+            "defaultValue": "adf-portfolio-devexec"
+        },
+        "ls_adls_properties_typeProperties_url": {
+            "type": "string",
+            "defaultValue": "https://stportfoliodata.dfs.core.windows.net/"
+        },
+        "new_csv_trigger_properties_pl_ingest_sales_parameters_proc_date": {
+            "type": "string",
+            "defaultValue": "@last(split(triggerBody().folderPath,'/'))"
+        },
+        "new_csv_trigger_properties_typeProperties_scope": {
+            "type": "string",
+            "defaultValue": "/subscriptions/2717566b-0807-4290-a937-d49c91ad707b/resourceGroups/rg-adf-portfolio-dev/providers/Microsoft.Storage/storageAccounts/stportfoliodata"
+        }
+    },
+    "variables": {
+        "factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('factoryName'), '/ls_adls')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureBlobFS",
+                "typeProperties": {
+                    "url": "[parameters('ls_adls_properties_typeProperties_url')]"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/pl_ingest_sales')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "get_landing_files",
+                        "type": "GetMetadata",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [
+                            {
+                                "name": "proc_date",
+                                "value": "@pipeline().parameters.proc_date"
+                            }
+                        ],
+                        "typeProperties": {
+                            "dataset": {
+                                "referenceName": "ds_csv_sales_landing",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "p_proc_date": {
+                                        "value": "@pipeline().parameters.proc_date",
+                                        "type": "Expression"
+                                    }
+                                }
+                            },
+                            "fieldList": [
+                                "childItems"
+                            ],
+                            "storeSettings": {
+                                "type": "AzureBlobFSReadSettings",
+                                "recursive": true,
+                                "enablePartitionDiscovery": false
+                            },
+                            "formatSettings": {
+                                "type": "DelimitedTextReadSettings"
+                            }
+                        }
+                    },
+                    {
+                        "name": "filter_csv",
+                        "type": "Filter",
+                        "dependsOn": [
+                            {
+                                "activity": "get_landing_files",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [
+                            {
+                                "name": "proc_date",
+                                "value": " @pipeline().parameters.proc_date"
+                            }
+                        ],
+                        "typeProperties": {
+                            "items": {
+                                "value": "@activity('get_landing_files').output.childItems",
+                                "type": "Expression"
+                            },
+                            "condition": {
+                                "value": "@endsWith(toLower(item().name), '.csv')",
+                                "type": "Expression"
+                            }
+                        }
+                    },
+                    {
+                        "name": "fe_each_csv",
+                        "type": "ForEach",
+                        "dependsOn": [
+                            {
+                                "activity": "filter_csv",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [
+                            {
+                                "name": "proc_date",
+                                "value": "@pipeline().parameters.proc_date"
+                            }
+                        ],
+                        "typeProperties": {
+                            "items": {
+                                "value": "@activity('filter_csv').output.Value",
+                                "type": "Expression"
+                            },
+                            "activities": [
+                                {
+                                    "name": "gm_file_size",
+                                    "type": "GetMetadata",
+                                    "dependsOn": [],
+                                    "policy": {
+                                        "timeout": "0.12:00:00",
+                                        "retry": 0,
+                                        "retryIntervalInSeconds": 30,
+                                        "secureOutput": false,
+                                        "secureInput": false
+                                    },
+                                    "userProperties": [
+                                        {
+                                            "name": "proc_date",
+                                            "value": " @pipeline().parameters.proc_date"
+                                        },
+                                        {
+                                            "name": "file_name",
+                                            "value": "@item().name"
+                                        }
+                                    ],
+                                    "typeProperties": {
+                                        "dataset": {
+                                            "referenceName": "ds_csv_sales_landing_file",
+                                            "type": "DatasetReference",
+                                            "parameters": {
+                                                "p_proc_date": {
+                                                    "value": "@pipeline().parameters.proc_date",
+                                                    "type": "Expression"
+                                                },
+                                                "p_file_name": {
+                                                    "value": "@item().name",
+                                                    "type": "Expression"
+                                                }
+                                            }
+                                        },
+                                        "fieldList": [
+                                            "size"
+                                        ],
+                                        "storeSettings": {
+                                            "type": "AzureBlobFSReadSettings",
+                                            "recursive": true,
+                                            "enablePartitionDiscovery": false
+                                        },
+                                        "formatSettings": {
+                                            "type": "DelimitedTextReadSettings"
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "If Condition1",
+                                    "type": "IfCondition",
+                                    "dependsOn": [
+                                        {
+                                            "activity": "gm_file_size",
+                                            "dependencyConditions": [
+                                                "Succeeded"
+                                            ]
+                                        }
+                                    ],
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "expression": {
+                                            "value": "@greater(\n  coalesce(activity('gm_file_size').output.size, 0),\n  0\n)",
+                                            "type": "Expression"
+                                        },
+                                        "ifFalseActivities": [
+                                            {
+                                                "name": "copy_to_errors",
+                                                "type": "Copy",
+                                                "dependsOn": [],
+                                                "policy": {
+                                                    "timeout": "0.12:00:00",
+                                                    "retry": 0,
+                                                    "retryIntervalInSeconds": 30,
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [
+                                                    {
+                                                        "name": "Source",
+                                                        "value": "landing/sales/@{pipeline().parameters.proc_date}/"
+                                                    },
+                                                    {
+                                                        "name": "Destination",
+                                                        "value": "errors/@{concat('sales/', pipeline().parameters.proc_date)}/"
+                                                    },
+                                                    {
+                                                        "name": "proc_date",
+                                                        "value": "@pipeline().parameters.proc_date"
+                                                    },
+                                                    {
+                                                        "name": "file_name",
+                                                        "value": "@item().name"
+                                                    }
+                                                ],
+                                                "typeProperties": {
+                                                    "source": {
+                                                        "type": "DelimitedTextSource",
+                                                        "storeSettings": {
+                                                            "type": "AzureBlobFSReadSettings",
+                                                            "recursive": true,
+                                                            "wildcardFolderPath": {
+                                                                "value": "@concat('sales/', pipeline().parameters.proc_date)",
+                                                                "type": "Expression"
+                                                            },
+                                                            "wildcardFileName": {
+                                                                "value": "@item().name",
+                                                                "type": "Expression"
+                                                            },
+                                                            "enablePartitionDiscovery": false
+                                                        },
+                                                        "formatSettings": {
+                                                            "type": "DelimitedTextReadSettings"
+                                                        }
+                                                    },
+                                                    "sink": {
+                                                        "type": "DelimitedTextSink",
+                                                        "storeSettings": {
+                                                            "type": "AzureBlobFSWriteSettings",
+                                                            "copyBehavior": "PreserveHierarchy"
+                                                        },
+                                                        "formatSettings": {
+                                                            "type": "DelimitedTextWriteSettings",
+                                                            "quoteAllText": true,
+                                                            "fileExtension": ".txt"
+                                                        }
+                                                    },
+                                                    "enableStaging": false,
+                                                    "translator": {
+                                                        "type": "TabularTranslator",
+                                                        "typeConversion": true,
+                                                        "typeConversionSettings": {
+                                                            "allowDataTruncation": true,
+                                                            "treatBooleanAsNumber": false
+                                                        }
+                                                    }
+                                                },
+                                                "inputs": [
+                                                    {
+                                                        "referenceName": "ds_csv_sales_landing",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "p_proc_date": {
+                                                                "value": "@pipeline().parameters.proc_date",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ],
+                                                "outputs": [
+                                                    {
+                                                        "referenceName": "ds_csv_sales_staging_errors",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "p_proc_date": {
+                                                                "value": "@pipeline().parameters.proc_date",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "name": "Delete_from_landing",
+                                                "type": "Delete",
+                                                "dependsOn": [
+                                                    {
+                                                        "activity": "copy_to_errors",
+                                                        "dependencyConditions": [
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                ],
+                                                "policy": {
+                                                    "timeout": "0.12:00:00",
+                                                    "retry": 0,
+                                                    "retryIntervalInSeconds": 30,
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "dataset": {
+                                                        "referenceName": "ds_csv_sales_landing_file",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "p_proc_date": {
+                                                                "value": "@pipeline().parameters.proc_date",
+                                                                "type": "Expression"
+                                                            },
+                                                            "p_file_name": {
+                                                                "value": "@item().name",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    },
+                                                    "enableLogging": false,
+                                                    "storeSettings": {
+                                                        "type": "AzureBlobFSReadSettings",
+                                                        "recursive": false,
+                                                        "enablePartitionDiscovery": false
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "name": "Append variable2",
+                                                "type": "AppendVariable",
+                                                "dependsOn": [
+                                                    {
+                                                        "activity": "Delete_from_landing",
+                                                        "dependencyConditions": [
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                ],
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "variableName": "v_err_files",
+                                                    "value": "@item().name"
+                                                }
+                                            }
+                                        ],
+                                        "ifTrueActivities": [
+                                            {
+                                                "name": "copy_to_staging",
+                                                "type": "Copy",
+                                                "dependsOn": [],
+                                                "policy": {
+                                                    "timeout": "0.12:00:00",
+                                                    "retry": 0,
+                                                    "retryIntervalInSeconds": 30,
+                                                    "secureOutput": false,
+                                                    "secureInput": false
+                                                },
+                                                "userProperties": [
+                                                    {
+                                                        "name": "Source",
+                                                        "value": "landing/sales/@{pipeline().parameters.proc_date}/"
+                                                    },
+                                                    {
+                                                        "name": "Destination",
+                                                        "value": "staging/@{concat('sales/', pipeline().parameters.proc_date)}/"
+                                                    },
+                                                    {
+                                                        "name": "proc_date",
+                                                        "value": "@pipeline().parameters.proc_date"
+                                                    },
+                                                    {
+                                                        "name": "file_name",
+                                                        "value": "@item().name"
+                                                    }
+                                                ],
+                                                "typeProperties": {
+                                                    "source": {
+                                                        "type": "DelimitedTextSource",
+                                                        "storeSettings": {
+                                                            "type": "AzureBlobFSReadSettings",
+                                                            "recursive": true,
+                                                            "wildcardFolderPath": {
+                                                                "value": "@concat('sales/', pipeline().parameters.proc_date)",
+                                                                "type": "Expression"
+                                                            },
+                                                            "wildcardFileName": {
+                                                                "value": "@item().name",
+                                                                "type": "Expression"
+                                                            },
+                                                            "enablePartitionDiscovery": false
+                                                        },
+                                                        "formatSettings": {
+                                                            "type": "DelimitedTextReadSettings"
+                                                        }
+                                                    },
+                                                    "sink": {
+                                                        "type": "DelimitedTextSink",
+                                                        "storeSettings": {
+                                                            "type": "AzureBlobFSWriteSettings",
+                                                            "copyBehavior": "PreserveHierarchy"
+                                                        },
+                                                        "formatSettings": {
+                                                            "type": "DelimitedTextWriteSettings",
+                                                            "quoteAllText": true,
+                                                            "fileExtension": ""
+                                                        }
+                                                    },
+                                                    "enableStaging": false,
+                                                    "translator": {
+                                                        "type": "TabularTranslator",
+                                                        "typeConversion": true,
+                                                        "typeConversionSettings": {
+                                                            "allowDataTruncation": true,
+                                                            "treatBooleanAsNumber": false
+                                                        }
+                                                    }
+                                                },
+                                                "inputs": [
+                                                    {
+                                                        "referenceName": "ds_csv_sales_landing",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "p_proc_date": {
+                                                                "value": "@pipeline().parameters.proc_date",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ],
+                                                "outputs": [
+                                                    {
+                                                        "referenceName": "ds_csv_sales_staging",
+                                                        "type": "DatasetReference",
+                                                        "parameters": {
+                                                            "p_proc_date": {
+                                                                "value": "@pipeline().parameters.proc_date",
+                                                                "type": "Expression"
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "name": "Append variable1",
+                                                "type": "AppendVariable",
+                                                "dependsOn": [
+                                                    {
+                                                        "activity": "copy_to_staging",
+                                                        "dependencyConditions": [
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                ],
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "variableName": "v_ok_files",
+                                                    "value": "@item().name"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "ok count var",
+                        "type": "SetVariable",
+                        "dependsOn": [
+                            {
+                                "activity": "fe_each_csv",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "variableName": "ok_count",
+                            "value": "@length(variables('v_ok_files'))"
+                        }
+                    },
+                    {
+                        "name": "error count var",
+                        "type": "SetVariable",
+                        "dependsOn": [
+                            {
+                                "activity": "fe_each_csv",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "variableName": "err_count",
+                            "value": "@length(variables('v_err_files'))"
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "parameters": {
+                    "proc_date": {
+                        "type": "string",
+                        "defaultValue": "@last(split(triggerBody().folderPath,'/'))"
+                    }
+                },
+                "variables": {
+                    "v_ok_files": {
+                        "type": "Array"
+                    },
+                    "v_err_files": {
+                        "type": "Array"
+                    },
+                    "ok_count": {
+                        "type": "Integer"
+                    },
+                    "err_count": {
+                        "type": "Integer"
+                    }
+                },
+                "annotations": [],
+                "lastPublishTime": "2025-10-05T00:27:36Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/ds_csv_sales_landing')]",
+                "[concat(variables('factoryId'), '/datasets/ds_csv_sales_landing_file')]",
+                "[concat(variables('factoryId'), '/datasets/ds_csv_sales_staging_errors')]",
+                "[concat(variables('factoryId'), '/datasets/ds_csv_sales_staging')]",
+                "[concat(variables('factoryId'), '/linkedServices/ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_csv_sales_landing')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_adls",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "p_proc_date": {
+                        "type": "string"
+                    }
+                },
+                "folder": {
+                    "name": "csv"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "folderPath": {
+                            "value": "sales/@{dataset().p_proc_date}",
+                            "type": "Expression"
+                        },
+                        "fileSystem": "landing"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_csv_sales_staging')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_adls",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "p_proc_date": {
+                        "type": "string"
+                    }
+                },
+                "folder": {
+                    "name": "csv"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "folderPath": {
+                            "value": "@concat('sales/', dataset().p_proc_date)",
+                            "type": "Expression"
+                        },
+                        "fileSystem": "staging"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_csv_sales_staging_errors')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_adls",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "p_proc_date": {
+                        "type": "string"
+                    }
+                },
+                "folder": {
+                    "name": "csv"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "folderPath": {
+                            "value": "@concat('sales/', dataset().p_proc_date)",
+                            "type": "Expression"
+                        },
+                        "fileSystem": "errors"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_csv_sales_landing_file')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_adls",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "p_proc_date": {
+                        "type": "string"
+                    },
+                    "p_file_name": {
+                        "type": "string"
+                    }
+                },
+                "folder": {
+                    "name": "csv"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileName": {
+                            "value": "@dataset().p_file_name",
+                            "type": "Expression"
+                        },
+                        "folderPath": {
+                            "value": "sales/@{dataset().p_proc_date}",
+                            "type": "Expression"
+                        },
+                        "fileSystem": "landing"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/new_csv_trigger')]",
+            "type": "Microsoft.DataFactory/factories/triggers",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "runtimeState": "Started",
+                "pipelines": [
+                    {
+                        "pipelineReference": {
+                            "referenceName": "pl_ingest_sales",
+                            "type": "PipelineReference"
+                        },
+                        "parameters": {
+                            "proc_date": "[parameters('new_csv_trigger_properties_pl_ingest_sales_parameters_proc_date')]"
+                        }
+                    }
+                ],
+                "type": "BlobEventsTrigger",
+                "typeProperties": {
+                    "blobPathBeginsWith": "/landing/blobs/",
+                    "ignoreEmptyBlobs": false,
+                    "scope": "[parameters('new_csv_trigger_properties_typeProperties_scope')]",
+                    "events": [
+                        "Microsoft.Storage.BlobCreated"
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/pipelines/pl_ingest_sales')]"
+            ]
+        }
+    ]
+}
