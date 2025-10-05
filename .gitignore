@@ -30,3 +30,26 @@ project2-databricks-delta/data/checkpoint/
 project2-databricks-delta/data/spark-warehouse/
 *.csv
 *.parquet
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors/IDE
+.vscode/
+.idea/
+
+# Archives & temp
+*.zip
+*.bak
+
+# Local env/config
+.env
+*.user
+
+# Logs & scratch
+logs/
+tmp/
+
+# Data (keep only small samples in /samples)
+data/
