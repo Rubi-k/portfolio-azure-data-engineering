@@ -11,13 +11,33 @@
             "type": "string",
             "defaultValue": "https://stportfoliodata.dfs.core.windows.net/"
         },
-        "new_csv_trigger_properties_pl_ingest_sales_parameters_proc_date": {
+        "new_csv_trigger_properties_pl_orchestrate_day_parameters_proc_date": {
             "type": "string",
             "defaultValue": "@last(split(triggerBody().folderPath,'/'))"
+        },
+        "new_csv_trigger_properties_pl_orchestrate_day_parameters_p_base": {
+            "type": "string",
+            "defaultValue": "USD"
         },
         "new_csv_trigger_properties_typeProperties_scope": {
             "type": "string",
             "defaultValue": "/subscriptions/2717566b-0807-4290-a937-d49c91ad707b/resourceGroups/rg-adf-portfolio-dev/providers/Microsoft.Storage/storageAccounts/stportfoliodata"
+        },
+        "AzureKeyVault1_properties_typeProperties_baseUrl": {
+            "type": "string",
+            "defaultValue": "https://kv-adf-portfolio-dev.vault.azure.net/"
+        },
+        "ls_fx_rates_api_properties_typeProperties_url": {
+            "type": "string",
+            "defaultValue": "https://api.apilayer.com/exchangerates_data/"
+        },
+        "ls_sqlserver_properties_typeProperties_server": {
+            "type": "string",
+            "defaultValue": "adftools-sqlinternal-demo.database.windows.net"
+        },
+        "ls_sqlserver_properties_typeProperties_database": {
+            "type": "string",
+            "defaultValue": "adftools-sqldb-dw-demo"
         }
     },
     "variables": {
@@ -526,8 +546,7 @@
                 },
                 "parameters": {
                     "proc_date": {
-                        "type": "string",
-                        "defaultValue": "@last(split(triggerBody().folderPath,'/'))"
+                        "type": "string"
                     }
                 },
                 "variables": {
@@ -728,11 +747,12 @@
                 "pipelines": [
                     {
                         "pipelineReference": {
-                            "referenceName": "pl_ingest_sales",
+                            "referenceName": "pl_orchestrate_day",
                             "type": "PipelineReference"
                         },
                         "parameters": {
-                            "proc_date": "[parameters('new_csv_trigger_properties_pl_ingest_sales_parameters_proc_date')]"
+                            "proc_date": "[parameters('new_csv_trigger_properties_pl_orchestrate_day_parameters_proc_date')]",
+                            "p_base": "[parameters('new_csv_trigger_properties_pl_orchestrate_day_parameters_p_base')]"
                         }
                     }
                 ],
@@ -747,7 +767,877 @@
                 }
             },
             "dependsOn": [
-                "[concat(variables('factoryId'), '/pipelines/pl_ingest_sales')]"
+                "[concat(variables('factoryId'), '/pipelines/pl_orchestrate_day')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/AzureKeyVault1')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureKeyVault",
+                "typeProperties": {
+                    "baseUrl": "[parameters('AzureKeyVault1_properties_typeProperties_baseUrl')]"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ls_fx_rates_api')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "HttpServer",
+                "typeProperties": {
+                    "url": "[parameters('ls_fx_rates_api_properties_typeProperties_url')]",
+                    "enableServerCertificateValidation": true,
+                    "authenticationType": "Anonymous",
+                    "authHeaders": {
+                        "apikey": {
+                            "type": "AzureKeyVaultSecret",
+                            "store": {
+                                "referenceName": "AzureKeyVault1",
+                                "type": "LinkedServiceReference"
+                            },
+                            "secretName": "api-exchange-key"
+                        }
+                    }
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/AzureKeyVault1')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_rates_json_staging')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_adls",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "p_proc_date": {
+                        "type": "string"
+                    }
+                },
+                "folder": {
+                    "name": "json"
+                },
+                "annotations": [],
+                "type": "Json",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileName": "rates.json",
+                        "folderPath": "refdata/rates/@{dataset().p_proc_date}",
+                        "fileSystem": "staging"
+                    }
+                },
+                "schema": {}
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/pl_enrich_rates')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "copy_rates_json",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "JsonSource",
+                                "storeSettings": {
+                                    "type": "HttpReadSettings",
+                                    "requestMethod": "GET"
+                                },
+                                "formatSettings": {
+                                    "type": "JsonReadSettings"
+                                }
+                            },
+                            "sink": {
+                                "type": "JsonSink",
+                                "storeSettings": {
+                                    "type": "AzureBlobFSWriteSettings"
+                                },
+                                "formatSettings": {
+                                    "type": "JsonWriteSettings"
+                                }
+                            },
+                            "enableStaging": false
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_http_rates",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "p_relative_url": "@concat(   formatDateTime(pipeline().parameters.proc_date,'yyyy-MM-dd'),   '?base=', pipeline().parameters.p_base,   '&symbols=USD,EUR,GBP' )"
+                                }
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_rates_json_staging",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "p_proc_date": {
+                                        "value": "@pipeline().parameters.proc_date",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "kv_get_secret",
+                        "type": "WebActivity",
+                        "dependsOn": [
+                            {
+                                "activity": "copy_rates_json",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": true,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "method": "GET",
+                            "headers": {},
+                            "url": "https://kv-adf-portfolio-dev.vault.azure.net/secrets/api-exchange-key/0a43d821eb1e41d38292eeffa4471102?api-version=7.0",
+                            "authentication": {
+                                "type": "MSI",
+                                "resource": "https://vault.azure.net"
+                            }
+                        }
+                    },
+                    {
+                        "name": "web_get_rates",
+                        "type": "WebActivity",
+                        "dependsOn": [
+                            {
+                                "activity": "kv_get_secret",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": true
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "method": "GET",
+                            "headers": {
+                                "apikey": {
+                                    "value": "@activity('kv_get_secret').output.value",
+                                    "type": "Expression"
+                                }
+                            },
+                            "url": "https://api.apilayer.com/exchangerates_data/@{formatDateTime(pipeline().parameters.proc_date,'yyyy-MM-dd')}?base=@{pipeline().parameters.p_base}&symbols=USD,EUR,GBP"
+                        }
+                    },
+                    {
+                        "name": "sp_load_rates",
+                        "type": "SqlServerStoredProcedure",
+                        "dependsOn": [
+                            {
+                                "activity": "web_get_rates",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [
+                            {
+                                "name": "rates",
+                                "value": "@string(activity('web_get_rates').output)"
+                            },
+                            {
+                                "name": "proc_rate",
+                                "value": "@pipeline().parameters.proc_date"
+                            }
+                        ],
+                        "typeProperties": {
+                            "storedProcedureName": "dbo.sp_load_currency_rates",
+                            "storedProcedureParameters": {
+                                "proc_date": {
+                                    "value": "@pipeline().parameters.proc_date",
+                                    "type": "String"
+                                },
+                                "payload": {
+                                    "value": "@string(activity('web_get_rates').output)",
+                                    "type": "String"
+                                }
+                            }
+                        },
+                        "linkedServiceName": {
+                            "referenceName": "ls_sqlserver",
+                            "type": "LinkedServiceReference"
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "parameters": {
+                    "proc_date": {
+                        "type": "string"
+                    },
+                    "p_base": {
+                        "type": "string",
+                        "defaultValue": "USD"
+                    }
+                },
+                "annotations": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/ds_http_rates')]",
+                "[concat(variables('factoryId'), '/datasets/ds_rates_json_staging')]",
+                "[concat(variables('factoryId'), '/linkedServices/ls_sqlserver')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_http_rates')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_fx_rates_api",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "p_relative_url": {
+                        "type": "string"
+                    }
+                },
+                "folder": {
+                    "name": "json"
+                },
+                "annotations": [],
+                "type": "Json",
+                "typeProperties": {
+                    "location": {
+                        "type": "HttpServerLocation",
+                        "relativeUrl": {
+                            "value": "@dataset().p_relative_url",
+                            "type": "Expression"
+                        }
+                    }
+                },
+                "schema": {}
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_fx_rates_api')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ls_sqlserver')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureSqlDatabase",
+                "typeProperties": {
+                    "server": "[parameters('ls_sqlserver_properties_typeProperties_server')]",
+                    "database": "[parameters('ls_sqlserver_properties_typeProperties_database')]",
+                    "encrypt": "mandatory",
+                    "trustServerCertificate": false,
+                    "authenticationType": "SystemAssignedManagedIdentity"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/pl_publish_gold')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "copy_sales_to_sql",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "DelimitedTextSource",
+                                "storeSettings": {
+                                    "type": "AzureBlobFSReadSettings",
+                                    "recursive": true,
+                                    "wildcardFolderPath": {
+                                        "value": "@concat('sales/', pipeline().parameters.proc_date)",
+                                        "type": "Expression"
+                                    },
+                                    "wildcardFileName": "*.csv",
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "DelimitedTextReadSettings"
+                                }
+                            },
+                            "sink": {
+                                "type": "AzureSqlSink",
+                                "preCopyScript": "DELETE FROM dbo.stg_sales WHERE CAST(sale_ts AS date) = '@{pipeline().parameters.proc_date}';\n",
+                                "writeBehavior": "insert",
+                                "sqlWriterUseTableLock": false,
+                                "disableMetricsCollection": false
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "mappings": [
+                                    {
+                                        "source": {
+                                            "name": "sale_id",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sale_id",
+                                            "type": "Int64",
+                                            "physicalType": "bigint"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "product_id",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "product_id",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "sale_ts",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sale_ts",
+                                            "type": "DateTime",
+                                            "physicalType": "datetime2"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "qty",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "qty",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "amount_src",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "amount_src",
+                                            "type": "Decimal",
+                                            "physicalType": "decimal",
+                                            "scale": 2,
+                                            "precision": 18
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "currency_src",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "currency_src",
+                                            "type": "String",
+                                            "physicalType": "char"
+                                        }
+                                    }
+                                ],
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_csv_sales_staging",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "p_proc_date": {
+                                        "value": "@pipeline().parameters.proc_date",
+                                        "type": "Expression"
+                                    }
+                                }
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_sql_stg_sales",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    },
+                    {
+                        "name": "sp_publish_sales",
+                        "type": "SqlServerStoredProcedure",
+                        "dependsOn": [
+                            {
+                                "activity": "copy_sales_to_sql",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "storedProcedureName": "dbo.sp_publish_sales",
+                            "storedProcedureParameters": {
+                                "proc_date": {
+                                    "value": {
+                                        "value": "@pipeline().parameters.proc_date",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "rates_base": {
+                                    "value": {
+                                        "value": "@pipeline().parameters.rates_base",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                }
+                            }
+                        },
+                        "linkedServiceName": {
+                            "referenceName": "ls_sqlserver",
+                            "type": "LinkedServiceReference"
+                        }
+                    },
+                    {
+                        "name": "copy_sales_to_parquet",
+                        "type": "Copy",
+                        "dependsOn": [
+                            {
+                                "activity": "sp_publish_sales",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [
+                            {
+                                "name": "proc_date",
+                                "value": "@pipeline().parameters.proc_date"
+                            },
+                            {
+                                "name": "gold_path",
+                                "value": "@concat('sales/year=', substring(pipeline().parameters.proc_date,0,4), '/month=', substring(pipeline().parameters.proc_date,5,2), '/day=', substring(pipeline().parameters.proc_date,8,2))"
+                            }
+                        ],
+                        "typeProperties": {
+                            "source": {
+                                "type": "AzureSqlSource",
+                                "sqlReaderQuery": "SELECT sale_id, product_id, sale_ts, qty, amount_src, currency_src, amount_usd\nFROM dbo.fact_sales\nWHERE CAST(sale_ts AS date) = '@{pipeline().parameters.proc_date}'",
+                                "queryTimeout": "02:00:00",
+                                "partitionOption": "None"
+                            },
+                            "sink": {
+                                "type": "ParquetSink",
+                                "storeSettings": {
+                                    "type": "AzureBlobFSWriteSettings",
+                                    "copyBehavior": "PreserveHierarchy"
+                                },
+                                "formatSettings": {
+                                    "type": "ParquetWriteSettings"
+                                }
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_sql_fact_sales",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_parquet_fact_sales_gold",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "p_proc_date": "@pipeline().parameters.proc_date"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "parameters": {
+                    "proc_date": {
+                        "type": "string",
+                        "defaultValue": "2025-10-05"
+                    },
+                    "rates_base": {
+                        "type": "string",
+                        "defaultValue": "USD"
+                    }
+                },
+                "annotations": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/ds_csv_sales_staging')]",
+                "[concat(variables('factoryId'), '/datasets/ds_sql_stg_sales')]",
+                "[concat(variables('factoryId'), '/linkedServices/ls_sqlserver')]",
+                "[concat(variables('factoryId'), '/datasets/ds_sql_fact_sales')]",
+                "[concat(variables('factoryId'), '/datasets/ds_parquet_fact_sales_gold')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_sql_stg_sales')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_sqlserver",
+                    "type": "LinkedServiceReference"
+                },
+                "folder": {
+                    "name": "sql"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "sale_id",
+                        "type": "bigint",
+                        "precision": 19
+                    },
+                    {
+                        "name": "product_id",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "sale_ts",
+                        "type": "datetime2",
+                        "scale": 7
+                    },
+                    {
+                        "name": "qty",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "amount_src",
+                        "type": "decimal",
+                        "precision": 18,
+                        "scale": 2
+                    },
+                    {
+                        "name": "currency_src",
+                        "type": "char"
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "dbo",
+                    "table": "stg_sales"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_sqlserver')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/pl_orchestrate_day')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "exec_ingest",
+                        "type": "ExecutePipeline",
+                        "dependsOn": [],
+                        "policy": {
+                            "secureInput": false
+                        },
+                        "userProperties": [
+                            {
+                                "name": "proc_date",
+                                "value": "@pipeline().parameters.proc_date"
+                            }
+                        ],
+                        "typeProperties": {
+                            "pipeline": {
+                                "referenceName": "pl_ingest_sales",
+                                "type": "PipelineReference"
+                            },
+                            "waitOnCompletion": true,
+                            "parameters": {
+                                "proc_date": "@pipeline().parameters.proc_date"
+                            }
+                        }
+                    },
+                    {
+                        "name": "Exec_rates",
+                        "type": "ExecutePipeline",
+                        "dependsOn": [
+                            {
+                                "activity": "exec_ingest",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "secureInput": false
+                        },
+                        "userProperties": [
+                            {
+                                "name": "proc_date",
+                                "value": "@pipeline().parameters.proc_date"
+                            }
+                        ],
+                        "typeProperties": {
+                            "pipeline": {
+                                "referenceName": "pl_enrich_rates",
+                                "type": "PipelineReference"
+                            },
+                            "waitOnCompletion": true,
+                            "parameters": {
+                                "proc_date": "@pipeline().parameters.proc_date",
+                                "p_base": "@pipeline().parameters.p_base"
+                            }
+                        }
+                    },
+                    {
+                        "name": "Exec_publish",
+                        "type": "ExecutePipeline",
+                        "dependsOn": [
+                            {
+                                "activity": "Exec_rates",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "secureInput": false
+                        },
+                        "userProperties": [
+                            {
+                                "name": "proc_date",
+                                "value": "@pipeline().parameters.proc_date"
+                            }
+                        ],
+                        "typeProperties": {
+                            "pipeline": {
+                                "referenceName": "pl_publish_gold",
+                                "type": "PipelineReference"
+                            },
+                            "waitOnCompletion": true,
+                            "parameters": {
+                                "proc_date": "@pipeline().parameters.proc_date",
+                                "rates_base": {
+                                    "value": "@pipeline().parameters.p_base",
+                                    "type": "Expression"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "parameters": {
+                    "proc_date": {
+                        "type": "string"
+                    },
+                    "p_base": {
+                        "type": "string",
+                        "defaultValue": "USD"
+                    }
+                },
+                "annotations": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/pipelines/pl_ingest_sales')]",
+                "[concat(variables('factoryId'), '/pipelines/pl_enrich_rates')]",
+                "[concat(variables('factoryId'), '/pipelines/pl_publish_gold')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_parquet_fact_sales_gold')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_adls",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "p_proc_date": {
+                        "type": "string"
+                    }
+                },
+                "folder": {
+                    "name": "parquet"
+                },
+                "annotations": [],
+                "type": "Parquet",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileName": "part-0000.parquet",
+                        "folderPath": {
+                            "value": "@concat(\n  'sales/',\n  'year=', substring(dataset().p_proc_date,0,4), '/',\n  'month=', substring(dataset().p_proc_date,5,2), '/',\n  'day=', substring(dataset().p_proc_date,8,2)\n)\n",
+                            "type": "Expression"
+                        },
+                        "fileSystem": "gold"
+                    },
+                    "compressionCodec": "snappy"
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_sql_fact_sales')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_sqlserver",
+                    "type": "LinkedServiceReference"
+                },
+                "folder": {
+                    "name": "sql"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "sale_id",
+                        "type": "bigint",
+                        "precision": 19
+                    },
+                    {
+                        "name": "product_id",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "sale_ts",
+                        "type": "datetime2",
+                        "scale": 7
+                    },
+                    {
+                        "name": "qty",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "amount_src",
+                        "type": "decimal",
+                        "precision": 18,
+                        "scale": 2
+                    },
+                    {
+                        "name": "currency_src",
+                        "type": "char"
+                    },
+                    {
+                        "name": "amount_usd",
+                        "type": "decimal",
+                        "precision": 18,
+                        "scale": 2
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "dbo",
+                    "table": "fact_sales"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_sqlserver')]"
             ]
         }
     ]

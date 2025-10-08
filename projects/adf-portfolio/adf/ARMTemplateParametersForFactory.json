@@ -8,11 +8,26 @@
         "ls_adls_properties_typeProperties_url": {
             "value": "https://stportfoliodata.dfs.core.windows.net/"
         },
-        "new_csv_trigger_properties_pl_ingest_sales_parameters_proc_date": {
+        "new_csv_trigger_properties_pl_orchestrate_day_parameters_proc_date": {
             "value": "@last(split(triggerBody().folderPath,'/'))"
+        },
+        "new_csv_trigger_properties_pl_orchestrate_day_parameters_p_base": {
+            "value": "USD"
         },
         "new_csv_trigger_properties_typeProperties_scope": {
             "value": "/subscriptions/2717566b-0807-4290-a937-d49c91ad707b/resourceGroups/rg-adf-portfolio-dev/providers/Microsoft.Storage/storageAccounts/stportfoliodata"
+        },
+        "AzureKeyVault1_properties_typeProperties_baseUrl": {
+            "value": "https://kv-adf-portfolio-dev.vault.azure.net/"
+        },
+        "ls_fx_rates_api_properties_typeProperties_url": {
+            "value": "https://api.apilayer.com/exchangerates_data/"
+        },
+        "ls_sqlserver_properties_typeProperties_server": {
+            "value": "adftools-sqlinternal-demo.database.windows.net"
+        },
+        "ls_sqlserver_properties_typeProperties_database": {
+            "value": "adftools-sqldb-dw-demo"
         }
     }
 }
