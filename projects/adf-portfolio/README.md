@@ -28,8 +28,6 @@ It ingests raw CSV sales files from a *landing* zone, validates and stages them,
 - **Security**: Key Vault secret (API key), ADF Managed Identity access to Key Vault and Storage, least-privilege SQL grants
 - **SQL**: `dim_currency_rate`, `stg_sales`, `fact_sales`
 
-> _Tip_: Add `docs/architecture.png` with a simple diagram: landing → staging → rates (API) → SQL publish → gold Parquet.
-
 ---
 
 ## Repository structure
