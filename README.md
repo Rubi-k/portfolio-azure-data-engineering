@@ -1,8 +1,8 @@
 # Azure Data Engineering Portfolio
 
 ## 🌍 About this Repository
-This repository showcases practical **Data Engineering projects on Microsoft Azure**, designed as a portfolio for recruiters and hiring managers.  
-It includes **end-to-end pipelines, documentation, SQL scripts, and architecture diagrams** to demonstrate hands-on experience with Azure services.
+This repository showcases **hands-on Data Engineering projects built on Microsoft Azure**, created as a portfolio for recruiters and hiring managers.  
+Each project demonstrates end-to-end data workflows — including **ingestion, transformation, orchestration, and publishing** — along with full documentation, SQL scripts, and architecture diagrams.
 
 ---
 
