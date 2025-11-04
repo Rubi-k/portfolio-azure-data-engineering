@@ -8,7 +8,15 @@ It includes **end-to-end pipelines, documentation, SQL scripts, and architecture
 
 ## 🚀 Projects
 
-### 1. ETL with Azure Data Factory & Synapse Serverless
+### 1. Azure Data Factory Portfolio Project
+End-to-end **Azure Data Engineering solution** integrating **Azure Data Factory, Databricks, SQL, and Key Vault**, following a realistic production-style design.  
+This project demonstrates **data ingestion, enrichment, orchestration, and gold-layer publishing**, with full documentation and deployment assets.  
+
+👉 [Explore the project](projects/adf-portfolio/)
+
+---
+
+### 2. ETL with Azure Data Factory & Synapse Serverless
 - **Ingest** raw CSV files from Azure Blob Storage (`rawdata` container).  
 - **Transform** data using Azure Data Factory (Mapping Data Flows).  
 - **Store** cleansed data as Parquet files in the `curated` container.  
@@ -34,7 +42,7 @@ End-to-end pipeline overview:
 
 ---
 
-### 2. Mini Lakehouse with Databricks & Delta Lake
+### 3. Mini Lakehouse with Databricks & Delta Lake
 - **Ingest** data into a Bronze Delta table.  
 - **Transform** into Silver and Gold layers with Databricks notebooks.  
 - **Enable** analytics with Databricks SQL and/or Synapse serverless.  
