@@ -243,4 +243,5 @@ WHERE CAST(sale_ts AS date)=@d AND amount_usd IS NULL;
 
 ## License
 
-MIT (optional; adjust to your preference)
+ECL-2.0
+
